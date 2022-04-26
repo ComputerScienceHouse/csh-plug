@@ -5,11 +5,12 @@ import (
 	csh_auth "github.com/liam-middlebrook/csh-auth"
 	log "github.com/sirupsen/logrus"
 	"image"
+	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-    _ "image/gif"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +44,25 @@ func (r PlugRoutes) action(c *gin.Context) {
 	}
 	log.WithFields(log.Fields{
 		"uid":           claims.UserInfo.Username,
+		"plug_id":       plug.ID,
+		"plug_s3id":     plug.S3ID,
+		"presigned_uri": url.String(),
+	}).Info("Presigned URI Generated")
+	r.app.db.AddLog(13, c.GetHeader("Referer"))
+	c.Redirect(http.StatusFound, url.String())
+}
+
+func (r PlugRoutes) actionPXE(c *gin.Context) {
+
+	if c.GetHeader("X-PXE-Secret") != os.Getenv("CSH_PLUG_PXE_SECRET") {
+		log.Info("Invalid PXE Secret")
+		return
+	}
+	plug := r.app.db.GetPlug("banner")
+	url := r.app.s3.PresignPlug(plug)
+
+	log.WithFields(log.Fields{
+		"uid":           "pxe",
 		"plug_id":       plug.ID,
 		"plug_s3id":     plug.S3ID,
 		"presigned_uri": url.String(),
