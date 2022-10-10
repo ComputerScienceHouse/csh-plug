@@ -1,11 +1,13 @@
 package main
 
 import (
-	"github.com/minio/minio-go"
-	log "github.com/sirupsen/logrus"
+	"fmt"
 	"io"
 	"net/url"
 	"time"
+
+	"github.com/minio/minio-go"
+	log "github.com/sirupsen/logrus"
 )
 
 type S3Connection struct {
@@ -38,9 +40,11 @@ func (c S3Connection) AddFile(plug Plug, data io.Reader, mime string) {
 	}
 }
 
-func (c S3Connection) DelFile(plug Plug) {
+func (c S3Connection) DelFile(plug *Plug) error {
 	err := c.con.RemoveObject("plugs", plug.S3ID)
 	if err != nil {
-		log.Error(err)
+		return fmt.Errorf("failed to remove plug object %s: %w", plug.S3ID)
 	}
+
+	return nil
 }

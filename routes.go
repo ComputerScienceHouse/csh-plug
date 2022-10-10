@@ -1,9 +1,6 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
-	csh_auth "github.com/liam-middlebrook/csh-auth"
-	log "github.com/sirupsen/logrus"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -14,6 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	csh_auth "github.com/liam-middlebrook/csh-auth"
+	log "github.com/sirupsen/logrus"
 )
 
 type PlugRoutes struct {
@@ -265,7 +266,14 @@ func (r PlugRoutes) plug_deletion(c *gin.Context) {
 	}
 
 	r.app.db.AddLog(1, "uid: "+claims.UserInfo.Username+" deleted: "+c.Param("id"))
-	r.app.db.DeletePlug(r.app.db.GetPlugById(id))
+
+	plug, err := r.app.db.GetPlugById(id)
+	if err != nil {
+		log.Error(err)
+		c.Redirect(http.StatusNotFound, "/")
+	}
+
+	r.app.db.DeletePlug(plug)
 
 	c.Redirect(http.StatusFound, "/admin")
 }

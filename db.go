@@ -2,10 +2,12 @@ package main
 
 import (
 	"database/sql"
-	_ "github.com/lib/pq"
-	log "github.com/sirupsen/logrus"
+	"fmt"
 	"strings"
 	"time"
+
+	_ "github.com/lib/pq"
+	log "github.com/sirupsen/logrus"
 )
 
 type DBConnection struct {
@@ -128,7 +130,7 @@ func (c DBConnection) GetPlug(shape string) Plug {
 		}
 	}
 	if finalPlug.ViewsRemaining == 0 {
-		c.DeletePlug(finalPlug)
+		c.DeletePlug(&finalPlug)
 		// try again
 		return c.GetPlug("banner")
 	}
@@ -136,75 +138,73 @@ func (c DBConnection) GetPlug(shape string) Plug {
 	return finalPlug
 }
 
-func (c DBConnection) GetPlugById(id int) Plug {
-	rows, err := c.con.Query(SQL_RETRIEVE_PLUG_BY_ID, id)
+func (c DBConnection) GetPlugById(id int) (*Plug, error) {
+	row := c.con.QueryRow(SQL_RETRIEVE_PLUG_BY_ID, id)
 
-	if err != nil {
-		log.Fatal(err)
+	obj := Plug{
+		ID: id,
 	}
 
-	var obj Plug
-	obj.ID = id
-	for rows.Next() {
-		err = rows.Scan(&obj.S3ID, &obj.Owner, &obj.ViewsRemaining, &obj.Approved)
-
-		if err != nil {
-			log.Error(err)
-		}
-
-		// Return after first result
-		return obj
+	if err := row.Scan(&obj.S3ID, &obj.Owner, &obj.ViewsRemaining, &obj.Approved); err != nil {
+		return nil, fmt.Errorf("failed to query for plug via ID %d: %w", id, err)
 	}
 
-	log.Fatal("We should not be able to reach this point!")
-	return obj
+	return &obj, nil
 }
 
-func (c DBConnection) DeletePlug(plug Plug) {
+func (c DBConnection) DeletePlug(plug *Plug) error {
 	_, err := c.con.Exec(SQL_DELETE_PLUG, plug.ID)
 	if err != nil {
-		log.Error(err)
+		return fmt.Errorf("failed to delete plug %v: %w", plug, err)
 	}
-	c.app.s3.DelFile(plug)
 
+	return c.app.s3.DelFile(plug)
 }
 
-func (c DBConnection) GetPendingPlugs() []Plug {
+func (c DBConnection) GetPendingPlugs() ([]*Plug, error) {
+	var plugs []*Plug
+
 	rows, err := c.con.Query(SQL_RETRIEVE_PENDING_PLUGS)
 
 	if err != nil {
-		log.Fatal(err)
+		return plugs, fmt.Errorf("failed to query for pending plugs: %w", err)
 	}
 
-	var plugs []Plug
+	defer rows.Close()
+
 	for rows.Next() {
-		var obj Plug
+		var obj *Plug
 		err = rows.Scan(&obj.ID, &obj.S3ID, &obj.Owner, &obj.ViewsRemaining, &obj.Approved, &obj.Shape)
 
 		if err != nil {
-			log.Error(err)
+			return plugs, fmt.Errorf("failed to scan scan pending plug row: %w", err)
 		}
+
 		plugs = append(plugs, obj)
 	}
 
-	return plugs
+	return plugs, nil
 }
 
-func (c DBConnection) GetUserPlugs(user string) []Plug {
+func (c DBConnection) GetUserPlugs(user string) ([]*Plug, error) {
+	var plugs []Plug
+
 	rows, err := c.con.Query(SQL_RETRIEVE_PENDING_PLUGS)
 
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to query for user %s's plugs: %w", user, error)
 	}
 
-	var plugs []Plug
+	defer rows.Close()
+
 	for rows.Next() {
-		var obj Plug
+		var obj *Plug
 		err = rows.Scan(&obj.ID, &obj.S3ID, &obj.Owner, &obj.ViewsRemaining, &obj.Approved, &obj.Shape)
 
 		if err != nil {
-			log.Error(err)
+			return plugs, fmt.Errorf("failed to scan scan pending plug row: %w", err)
 		}
+
 		if obj.Owner == user {
 			plugs = append(plugs, obj)
 		}
