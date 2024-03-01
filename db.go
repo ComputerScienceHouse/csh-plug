@@ -130,7 +130,7 @@ func (c DBConnection) GetPlug(shape string) Plug {
 	if finalPlug.ViewsRemaining == 0 {
 		c.DeletePlug(finalPlug)
 		// try again
-		return c.GetPlug("banner")
+		return c.GetPlug(shape)
 	}
 
 	return finalPlug
