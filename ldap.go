@@ -1,11 +1,13 @@
 package main
 
 import (
-	"crypto/tls"
 	"fmt"
+	"strconv"
+	"time"
+
+	"crypto/tls"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/ldap.v2"
-	"strconv"
 )
 
 type LDAPConnection struct {
@@ -33,15 +35,40 @@ func (c *LDAPConnection) Init(
 func (c *LDAPConnection) reconnectToLDAP() {
 	lcon, err := ldap.DialTLS("tcp", c.host,
 		&tls.Config{ServerName: "ldap.csh.rit.edu"})
-	if err != nil {
-		c.app.db.AddLog(0, "ldap connection error: "+err.Error())
-		log.Fatal(err)
+
+	maxReconnectionAttempts := 3 // TODO (wilnil): Use an environment variable?
+	attempts := 0
+
+	for err != nil {
+		if attempts < maxReconnectionAttempts {
+			c.app.db.AddLog(0, "ldap connection error: "+err.Error())
+			log.Info(err)
+			time.Sleep(2 * time.Second)
+			lcon, err = ldap.DialTLS("tcp", c.host,
+				&tls.Config{ServerName: "ldap.csh.rit.edu"})
+		} else {
+			c.app.db.AddLog(0, "ldap connection error: "+err.Error())
+			log.Fatal(err)
+		}
+		maxReconnectionAttempts++
 	}
+
 	err = lcon.Bind(c.bind_dn, c.bind_pw)
-	if err != nil {
-		c.app.db.AddLog(0, "ldap bind error: "+err.Error())
-		log.Fatal(err)
+
+	attempts = 0
+	for err != nil {
+		if attempts < maxReconnectionAttempts {
+			c.app.db.AddLog(0, "ldap bind error: "+err.Error())
+			log.Info(err)
+			time.Sleep(2 * time.Second)
+			err = lcon.Bind(c.bind_dn, c.bind_pw)
+		} else {
+			c.app.db.AddLog(0, "ldap bind error: "+err.Error())
+			log.Fatal(err)
+		}
+		maxReconnectionAttempts++
 	}
+
 	c.con = lcon
 }
 
