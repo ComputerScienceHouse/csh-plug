@@ -146,7 +146,7 @@ func (r PlugRoutes) upload(c *gin.Context) {
 	mime := getMime(data)
 	data.Seek(0, 0)
 
-	if !r.app.ldap.DecrementCredits(plug.Owner, numCredits) {
+	if !r.app.ldap.HasEnoughCredits(plug.Owner, numCredits) {
 		c.String(http.StatusPaymentRequired, "Get More Credits!")
 		return
 	}
@@ -156,7 +156,10 @@ func (r PlugRoutes) upload(c *gin.Context) {
 	plug.S3ID = time.Now().Format("2006/01/02/150405") + "-" + plug.Owner + "-" + file.Filename
 	r.app.s3.AddFile(plug, data, mime)
 
-	r.app.db.MakePlug(plug)
+	if !r.app.db.MakePlug(plug) {
+		c.String(http.StatusBadRequest, "Your filename was probably too long, but it could also be an internal db error.")
+		return
+	}
 
 	r.app.db.AddLog(1, "uid: "+plug.Owner+"uploaded plug s3id"+plug.S3ID)
 	c.HTML(http.StatusOK, "success.tmpl", gin.H{
@@ -167,6 +170,7 @@ func (r PlugRoutes) upload(c *gin.Context) {
 		"plug_id":   plug.ID,
 		"plug_s3id": plug.S3ID,
 	}).Info("Uploaded new Plug!")
+	r.app.ldap.DecrementCredits(plug.Owner, numCredits)
 }
 
 func (r PlugRoutes) upload_view(c *gin.Context) {
