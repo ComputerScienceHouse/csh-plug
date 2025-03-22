@@ -5,11 +5,12 @@ import (
 	csh_auth "github.com/liam-middlebrook/csh-auth"
 	log "github.com/sirupsen/logrus"
 	"image"
+	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-    _ "image/gif"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +44,25 @@ func (r PlugRoutes) action(c *gin.Context) {
 	}
 	log.WithFields(log.Fields{
 		"uid":           claims.UserInfo.Username,
+		"plug_id":       plug.ID,
+		"plug_s3id":     plug.S3ID,
+		"presigned_uri": url.String(),
+	}).Info("Presigned URI Generated")
+	r.app.db.AddLog(13, c.GetHeader("Referer"))
+	c.Redirect(http.StatusFound, url.String())
+}
+
+func (r PlugRoutes) actionPXE(c *gin.Context) {
+
+	if c.GetHeader("X-PXE-Secret") != os.Getenv("CSH_PLUG_PXE_SECRET") {
+		log.Info("Invalid PXE Secret")
+		return
+	}
+	plug := r.app.db.GetPlug("banner")
+	url := r.app.s3.PresignPlug(plug)
+
+	log.WithFields(log.Fields{
+		"uid":           "pxe",
 		"plug_id":       plug.ID,
 		"plug_s3id":     plug.S3ID,
 		"presigned_uri": url.String(),
@@ -118,15 +138,15 @@ func (r PlugRoutes) upload(c *gin.Context) {
 		c.String(http.StatusUnsupportedMediaType, "Specify numCredits")
 		return
 	}
-	if numCredits < 0 {
+	if numCredits < 1 {
 		log.Error(err)
-		c.String(http.StatusBadRequest, "Can't specify negative credits!")
+		c.String(http.StatusBadRequest, "Must specify 1 or more credits!")
 		return
 	}
 	mime := getMime(data)
 	data.Seek(0, 0)
 
-	if !r.app.ldap.DecrementCredits(plug.Owner, numCredits) {
+	if !r.app.ldap.HasEnoughCredits(plug.Owner, numCredits) {
 		c.String(http.StatusPaymentRequired, "Get More Credits!")
 		return
 	}
@@ -136,7 +156,10 @@ func (r PlugRoutes) upload(c *gin.Context) {
 	plug.S3ID = time.Now().Format("2006/01/02/150405") + "-" + plug.Owner + "-" + file.Filename
 	r.app.s3.AddFile(plug, data, mime)
 
-	r.app.db.MakePlug(plug)
+	if !r.app.db.MakePlug(plug) {
+		c.String(http.StatusBadRequest, "Your filename was probably too long, but it could also be an internal db error.")
+		return
+	}
 
 	r.app.db.AddLog(1, "uid: "+plug.Owner+"uploaded plug s3id"+plug.S3ID)
 	c.HTML(http.StatusOK, "success.tmpl", gin.H{
@@ -147,6 +170,7 @@ func (r PlugRoutes) upload(c *gin.Context) {
 		"plug_id":   plug.ID,
 		"plug_s3id": plug.S3ID,
 	}).Info("Uploaded new Plug!")
+	r.app.ldap.DecrementCredits(plug.Owner, numCredits)
 }
 
 func (r PlugRoutes) upload_view(c *gin.Context) {

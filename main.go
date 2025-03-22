@@ -115,6 +115,7 @@ func main() {
 
 	app.router.GET("/", app.auth.AuthWrapper(r.index))
 	app.router.GET("/data", app.auth.AuthWrapper(r.action))
+	app.router.GET("/data-pxe", r.actionPXE)
 	app.router.GET("/vert", app.auth.AuthWrapper(r.vert_action))
 	app.router.GET("/upload", app.auth.AuthWrapper(r.upload_view))
 	app.router.POST("/upload", app.auth.AuthWrapper(r.upload))

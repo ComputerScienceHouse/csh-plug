@@ -130,7 +130,7 @@ func (c DBConnection) GetPlug(shape string) Plug {
 	if finalPlug.ViewsRemaining == 0 {
 		c.DeletePlug(finalPlug)
 		// try again
-		return c.GetPlug("banner")
+		return c.GetPlug(shape)
 	}
 
 	return finalPlug
@@ -239,7 +239,9 @@ func (c DBConnection) AddLog(severity int, message string) {
 	}
 }
 
-func (c DBConnection) MakePlug(plug Plug) {
+// MakePlug returns true when the plug is successfully created
+// returns false if not
+func (c DBConnection) MakePlug(plug Plug) bool {
 	_, err := c.con.Exec(
 		SQL_CREATE_PLUG,
 		plug.S3ID,
@@ -249,5 +251,7 @@ func (c DBConnection) MakePlug(plug Plug) {
 	)
 	if err != nil {
 		log.Error(err)
+		return false
 	}
+	return true
 }

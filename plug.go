@@ -37,7 +37,7 @@ func ChoosePlug(plugs []Plug) Plug {
 	}
 	// Decide whether to chose default ad or user submitted ad
 	var pickDefault int = rand.Intn(100)
-	if pickDefault >= DEFAULT_AD_CHANCE || len(customs) == 0 {
+	if len(defaults) > 0 && (pickDefault >= DEFAULT_AD_CHANCE || len(customs) == 0) {
 		return defaults[rand.Intn(len(defaults))]
 	} else {
 		return customs[rand.Intn(len(customs))]

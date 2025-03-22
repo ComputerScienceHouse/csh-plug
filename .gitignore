@@ -14,4 +14,6 @@
 .glide/
 
 .env
-csh-plug # Oops, binary
+
+# Don't commit local build artifacts
+csh-plug

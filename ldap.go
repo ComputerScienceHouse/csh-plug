@@ -97,7 +97,7 @@ func (c LDAPConnection) CheckIfIntroMember(username string) bool {
 	return len(sr.Entries) > 0
 }
 
-func (c LDAPConnection) DecrementCredits(username string, credits int) bool {
+func (c LDAPConnection) CheckCredits(username string) int {
 	c.pingLDAPAlive()
 	searchRequest := ldap.NewSearchRequest(
 		"uid="+username+",cn=users,cn=accounts,dc=csh,dc=rit,dc=edu",
@@ -119,7 +119,17 @@ func (c LDAPConnection) DecrementCredits(username string, credits int) bool {
 		log.Fatal(err)
 	}
 	log.Info("current balance for %s is %d", username, balance)
+	return balance
 
+}
+
+func (c LDAPConnection) HasEnoughCredits(username string, credits int) bool {
+	balance := c.CheckCredits(username)
+	return balance >= credits
+}
+
+func (c LDAPConnection) DecrementCredits(username string, credits int) bool {
+	balance := c.CheckCredits(username)
 	newBalance := balance - credits
 
 	if newBalance < 0 {
@@ -129,7 +139,7 @@ func (c LDAPConnection) DecrementCredits(username string, credits int) bool {
 
 	modifyRequest := ldap.NewModifyRequest("uid=" + username + ",cn=users,cn=accounts,dc=csh,dc=rit,dc=edu")
 	modifyRequest.Replace("drinkBalance", []string{fmt.Sprintf("%d", newBalance)})
-	err = c.con.Modify(modifyRequest)
+	err := c.con.Modify(modifyRequest)
 	if err != nil {
 		c.app.db.AddLog(0, "ldap modification error: "+err.Error())
 		log.Fatal(err)
